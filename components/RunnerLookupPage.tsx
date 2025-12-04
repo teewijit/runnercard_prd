@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { findRunnerByDetails, getWalletConfig, logUserActivity } from '../services/supabaseService';
 import { WalletConfig } from '../types';
@@ -17,6 +17,7 @@ const RunnerLookupPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [config, setConfig] = useState<Partial<WalletConfig>>({});
     const navigate = useNavigate();
+    const isSubmittingRef = useRef(false); // Guard to prevent double submission
 
     useEffect(() => {
         const fetchPageConfig = async () => {
@@ -33,6 +34,12 @@ const RunnerLookupPage: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Guard: Prevent double submission (especially on mobile devices)
+        if (isSubmittingRef.current || loading) {
+            return;
+        }
+
         setError(null);
 
         // Basic validation: ensure at least one lookup method is filled
@@ -44,6 +51,8 @@ const RunnerLookupPage: React.FC = () => {
             return;
         }
 
+        // Set guard flag immediately to prevent double submission
+        isSubmittingRef.current = true;
         setLoading(true);
         
         // Determine search method and prepare hash for logging
@@ -60,63 +69,71 @@ const RunnerLookupPage: React.FC = () => {
             searchInputHash = await hashSearchInput(nameCombination);
         }
 
-        const result = await findRunnerByDetails({
-            firstName: isNameFilled ? firstName : undefined,
-            lastName: isNameFilled ? lastName : undefined,
-            idCardNumber: isIdFilled ? idCardNumber : undefined,
-        });
-        setLoading(false);
-
-        // Log the lookup activity (non-blocking)
-        if (searchMethod && searchInputHash) {
-            logUserActivity({
-                activity_type: 'lookup',
-                search_method: searchMethod,
-                search_input_hash: searchInputHash,
-                runner_id: result.data?.id || null,
-                success: !!result.data,
-                error_message: result.error || (!result.data ? 'Runner not found' : null) || null,
-            }).catch((err) => {
-                // Fail silently to avoid impacting UX
-                console.warn('Failed to log lookup activity:', err);
+        try {
+            const result = await findRunnerByDetails({
+                firstName: isNameFilled ? firstName : undefined,
+                lastName: isNameFilled ? lastName : undefined,
+                idCardNumber: isIdFilled ? idCardNumber : undefined,
             });
-        }
 
-        if (result.data) {
-            console.log(result.data);
-            const isThai = result.data.nationality === 'Thai';
-            if (result.data.colour_sign === "DEFER") {
-                const message = isThai
-                    ? 'คุณได้เลือกสมัครแบบ <strong>ไม่วิ่ง (Defer)</strong> รักษาสิทธิ์นักวิ่งเก่าไว้<br/>เสื้อที่ระลึกและสินค้าที่ระลึก (ถ้ามี) จะถูกส่งให้ทางไปรษณีย์หลังงานภายใน 1 สัปดาห์'
-                    : 'You have chosen <strong>"Non-Running" (Defer)</strong>. The event t-shirt and any souvenirs (if applicable) will be sent by mail within one week after the event.';
-
-                Swal.fire({
-                    title: 'Defer Runner',
-                    html: `<p style="font-size: 1.2rem; font-weight: 300;">${message}</p>`,
-                    background: '#cbcad3',
-                    color: '#1f2937',
-                    confirmButtonColor: '#1f2937',
-
+            // Log the lookup activity (non-blocking)
+            if (searchMethod && searchInputHash) {
+                logUserActivity({
+                    activity_type: 'lookup',
+                    search_method: searchMethod,
+                    search_input_hash: searchInputHash,
+                    runner_id: result.data?.id || null,
+                    success: !!result.data,
+                    error_message: result.error || (!result.data ? 'Runner not found' : null) || null,
+                }).catch((err) => {
+                    // Fail silently to avoid impacting UX
+                    console.warn('Failed to log lookup activity:', err);
                 });
-            } else if (result.data.colour_sign === "REFUND") {
-                const message = isThai
-                    ? 'สถานะการสมัคร : ยกเลิกแบบรับเงินคืนบางส่วน (refund)'
-                    : 'registration status: cancelled with a partial refund (completed)';
-                Swal.fire({
-                    title: 'Refund Runner',
-                    html: `<p style="font-size: 1.2rem; font-weight: 300;">${message}</p>`,
-                    background: '#cbcad3',
-                    color: '#1f2937',
-                    confirmButtonColor: '#1f2937',
-                });
-            } else {
-                // On success, navigate to the bib pass page and pass a state to bypass verification
-                navigate(`/bibpass/${result.data.access_key}`, { state: { verified: true } });
             }
-        } else if (result.error) {
-            setError(result.error);
-        } else {
-            setError('Runner not found. Please check your details and try again.');
+
+            if (result.data) {
+                console.log(result.data);
+                const isThai = result.data.nationality === 'Thai';
+                if (result.data.colour_sign === "DEFER") {
+                    const message = isThai
+                        ? 'คุณได้เลือกสมัครแบบ <strong>ไม่วิ่ง (Defer)</strong> รักษาสิทธิ์นักวิ่งเก่าไว้<br/>เสื้อที่ระลึกและสินค้าที่ระลึก (ถ้ามี) จะถูกส่งให้ทางไปรษณีย์หลังงานภายใน 1 สัปดาห์'
+                        : 'You have chosen <strong>"Non-Running" (Defer)</strong>. The event t-shirt and any souvenirs (if applicable) will be sent by mail within one week after the event.';
+
+                    Swal.fire({
+                        title: 'Defer Runner',
+                        html: `<p style="font-size: 1.2rem; font-weight: 300;">${message}</p>`,
+                        background: '#cbcad3',
+                        color: '#1f2937',
+                        confirmButtonColor: '#1f2937',
+
+                    });
+                } else if (result.data.colour_sign === "REFUND") {
+                    const message = isThai
+                        ? 'สถานะการสมัคร : ยกเลิกแบบรับเงินคืนบางส่วน (refund)'
+                        : 'registration status: cancelled with a partial refund (completed)';
+                    Swal.fire({
+                        title: 'Refund Runner',
+                        html: `<p style="font-size: 1.2rem; font-weight: 300;">${message}</p>`,
+                        background: '#cbcad3',
+                        color: '#1f2937',
+                        confirmButtonColor: '#1f2937',
+                    });
+                } else {
+                    // On success, navigate to the bib pass page and pass a state to bypass verification
+                    navigate(`/bibpass/${result.data.access_key}`, { state: { verified: true } });
+                }
+            } else if (result.error) {
+                setError(result.error);
+            } else {
+                setError('Runner not found. Please check your details and try again.');
+            }
+        } catch (err: any) {
+            console.error('Error in handleSubmit:', err);
+            setError('An error occurred. Please try again.');
+        } finally {
+            // Reset guard and loading state
+            isSubmittingRef.current = false;
+            setLoading(false);
         }
     };
 
