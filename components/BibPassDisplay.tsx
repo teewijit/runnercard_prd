@@ -303,7 +303,19 @@ export const BibPassDisplay: React.FC<BibPassDisplayProps> = () => {
       console.error("Failed to generate image:", err);
       setWalletError("Failed to save image. Please try again.");
       setIsCapturing(false);
+
+      
       // Log failed...
+      if (runner?.id) {
+        logUserActivity({
+          activity_type: 'save_image',
+          runner_id: runner.id,
+          success: false,
+          error_message: err instanceof Error ? err.message : 'Failed to save image',
+        }).catch((logErr) => {
+          console.warn('Failed to log save image activity:', logErr);
+        });
+      }
     } finally {
       setIsSavingImage(false);
     }
