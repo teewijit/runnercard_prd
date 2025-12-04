@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Runner } from '../types';
 import { getRunners, updateRunner as updateRunnerService } from '../services/supabaseService';
+import { hashNationalId } from '../utils/hashing';
 import Button from './Button';
 import Input from './Input';
 import Select from './Select'; // Import the new Select component
@@ -89,6 +90,7 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [isEditingRunner, setIsEditingRunner] = useState<Runner | null>(null);
   const [editForm, setEditForm] = useState<Partial<Runner>>({});
+  const [idCardNumber, setIdCardNumber] = useState<string>(''); // State for raw ID card number
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [hasFormChanges, setHasFormChanges] = useState(false); // New state for tracking form changes
@@ -124,15 +126,16 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
   }, [searchTerm, refreshDataTrigger, currentPage]); // Add currentPage to dependencies
 
   // Function to compare form state with original runner data
-  const areFormsEqual = useCallback((obj1: Partial<Runner>, obj2: Runner | null): boolean => {
+  const areFormsEqual = useCallback((obj1: Partial<Runner>, obj2: Runner | null, rawIdCard?: string): boolean => {
     if (!obj2) return false;
 
-    // Keys to compare, excluding internal/non-editable fields like 'id', 'created_at', 'id_card_hash', 'pass_generated', 'google_jwt', 'apple_pass_url', 'access_key'
+    // Keys to compare, excluding internal/non-editable fields like 'id', 'created_at', 'pass_generated', 'google_jwt', 'apple_pass_url', 'access_key'
+    // Note: id_card_hash is now included in comparison
     const keysToCompare: Array<keyof Runner> = [
       "first_name", "last_name", "bib", "race_kit",
       "row", "row_no", "shirt", "shirt_type", "gender", "nationality", "age_category",
       "block", "wave_start", "pre_order", "first_half_marathon", "note",
-      "top_50_no", "top50", "colour_sign", "qr"
+      "top_50_no", "top50", "colour_sign", "qr", "id_card_hash"
     ];
 
     for (const key of keysToCompare) {
@@ -150,14 +153,46 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
     return true;
   }, []);
 
-  // Effect to update hasFormChanges whenever editForm or isEditingRunner changes
+  // Effect to update hasFormChanges whenever editForm, isEditingRunner, or idCardNumber changes
   useEffect(() => {
-    if (isEditingRunner && editForm) {
-      setHasFormChanges(!areFormsEqual(editForm, isEditingRunner));
-    } else {
+    if (!isEditingRunner || !editForm) {
       setHasFormChanges(false);
+      return;
     }
-  }, [editForm, isEditingRunner, areFormsEqual]);
+
+    // Check other fields first (excluding id_card_hash since we handle it separately)
+    const otherFieldsChanged = !areFormsEqual(editForm, isEditingRunner);
+    
+    // Check if ID card hash would change
+    const checkHashChange = async () => {
+      if (idCardNumber.trim()) {
+        // If idCardNumber is provided, hash it and compare with original
+        try {
+          const newHash = await hashNationalId(idCardNumber.trim());
+          const currentHash = isEditingRunner.id_card_hash || '';
+          return newHash !== currentHash;
+        } catch (error) {
+          console.error('Error hashing ID card number:', error);
+          return false;
+        }
+      } else {
+        // If idCardNumber is empty, check if original had a hash (user wants to remove it)
+        return (isEditingRunner.id_card_hash || '') !== '';
+      }
+    };
+
+    // Use async function to handle hash comparison
+    let isCancelled = false;
+    checkHashChange().then(hashChanged => {
+      if (!isCancelled) {
+        setHasFormChanges(otherFieldsChanged || hashChanged);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [editForm, isEditingRunner, areFormsEqual, idCardNumber]);
 
 
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,6 +258,7 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
   const handleEditClick = useCallback((runner: Runner) => {
     setIsEditingRunner(runner);
     setEditForm({ ...runner }); // Initialize form with current runner data
+    setIdCardNumber(''); // Reset ID card number (we don't store raw number, so start empty)
     setIsEditModalOpen(true);
     setUpdateError(null);
     setHasFormChanges(false); // Reset changes flag when opening
@@ -244,12 +280,32 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
       setIsEditModalOpen(false); // Close the modal if no changes were made and user clicked save
       setIsEditingRunner(null);
       setEditForm({});
+      setIdCardNumber('');
       return;
     }
 
     setLoading(true); // Use global loading state for modal too
     setUpdateError(null);
-    const result = await updateRunnerService({ id: isEditingRunner.id, ...editForm }); // Pass ID explicitly for clarity and ensure it's in partial
+
+    // Prepare update data
+    const updateData: Partial<Runner> = { ...editForm };
+
+    // If idCardNumber is provided, hash it and update id_card_hash
+    if (idCardNumber.trim()) {
+      try {
+        const hashedId = await hashNationalId(idCardNumber.trim());
+        updateData.id_card_hash = hashedId;
+      } catch (error: any) {
+        setLoading(false);
+        setUpdateError(`Failed to hash ID card number: ${error.message || 'Unknown error'}`);
+        return;
+      }
+    } else if (idCardNumber === '' && isEditingRunner.id_card_hash) {
+      // If idCardNumber is cleared, remove the hash
+      updateData.id_card_hash = null;
+    }
+
+    const result = await updateRunnerService({ id: isEditingRunner.id, ...updateData });
     setLoading(false);
 
     if (result.error) {
@@ -260,6 +316,7 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
         setIsEditModalOpen(false);
         setIsEditingRunner(null);
         setEditForm({});
+        setIdCardNumber('');
         setHasFormChanges(false); // Reset changes flag on successful save
         await fetchRunners(currentPage, RUNNERS_PER_PAGE, searchTerm); // Refetch current page
       } else { // No data returned, but no error - means no effective changes by DB.
@@ -269,11 +326,12 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
         setIsEditModalOpen(false);
         setIsEditingRunner(null);
         setEditForm({});
+        setIdCardNumber('');
         setHasFormChanges(false); // Reset changes flag
         await fetchRunners(currentPage, RUNNERS_PER_PAGE, searchTerm); // Still refresh to ensure consistency in case of subtle sync issues
       }
     }
-  }, [isEditingRunner, editForm, searchTerm, fetchRunners, hasFormChanges, currentPage]);
+  }, [isEditingRunner, editForm, idCardNumber, searchTerm, fetchRunners, hasFormChanges, currentPage]);
 
   const totalPages = useMemo(() => Math.ceil(totalRunnersCount / RUNNERS_PER_PAGE), [totalRunnersCount]);
   // `paginatedRunners` is no longer needed; `runners` state now directly holds the current page's data.
@@ -499,7 +557,10 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
 
       <Modal
         isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setIdCardNumber('');
+        }}
         title="Edit Runner Details"
         footer={modalFooter}
       >
@@ -542,12 +603,20 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
                   onChange={handleEditFormChange}
                 />
                 <Input
+                  id="edit-id_card_number"
+                  label="ID Card Number"
+                  name="id_card_number"
+                  value={idCardNumber}
+                  onChange={(e) => setIdCardNumber(e.target.value)}
+                  placeholder="Enter ID card number (will be hashed on save)"
+                />
+                <Input
                   id="edit-id_card_hash"
-                  label="ID Card Hash"
+                  label="ID Card Hash (Current)"
                   name="id_card_hash"
                   value={editForm.id_card_hash || ''}
-                  onChange={handleEditFormChange}
-                  disabled={true} // ID hash typically should not be editable
+                  disabled={true}
+                  placeholder="Hash will be updated when you save"
                 />
                 <Input
                   id="edit-race_kit"
