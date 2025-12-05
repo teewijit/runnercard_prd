@@ -154,10 +154,10 @@ export const BibPassDisplay: React.FC<BibPassDisplayProps> = () => {
   }, [accessKey, fetchRunnerData]);
 
   useEffect(() => {
-    if (runner && location.state?.verified === true) {
+    if (runner) {
       setIsVerified(true);
     }
-  }, [runner, location.state]);
+  }, [runner]);
 
   const handleVerification = useCallback(() => {
     if (!runner) return;
@@ -193,20 +193,52 @@ export const BibPassDisplay: React.FC<BibPassDisplayProps> = () => {
     const isAndroid = /Android/i.test(userAgent);
     const isLineApp = /Line/i.test(userAgent);
     const isFacebookApp = /FBAN|FBAV|Messenger|Instagram/i.test(userAgent);
+    const currentUrl = new URL(window.location.href);
+  
+  // เช็คเฉพาะ Android ที่เปิดผ่าน LINE หรือ Facebook
+  if (isAndroid) {
+    if (isLineApp) {
+      // สำหรับ LINE: ใช้ openExternalBrowser parameter
+      currentUrl.searchParams.set('openExternalBrowser', '1');
 
-    // เช็คเฉพาะ Android ที่เปิดผ่าน LINE หรือ Facebook
-    if (isAndroid) {
-      if (isLineApp) {
-        alert("the in-app browser do not allow saving image.\n\nบราวเซอร์ของคุณไม่อนุญาติให้บันทึกรูป");
-        return; // จบการทำงานทันที
+      // แจ้งเตือนผู้ใช้ก่อนเด้ง
+      const userConfirmed = confirm(
+        "he in-app browser do not allow saving image.\n" +
+        "บราวเซอร์ของคุณไม่อนุญาติให้บันทึกรูป"
+      );
+
+      if (userConfirmed) {
+        window.location.href = currentUrl.toString();
       }
-      
-      if (isFacebookApp) {
+      return;
+    }
+
+    if (isFacebookApp) {
+      const currentUrl = window.location.href;
+
+      // [CASE 1]: Android ใช้เทคนิค Intent เพื่อดีดไป Chrome
+      if (isAndroid) {
+        // ลบ https:// ออกจาก url เดิม
+        const urlWithoutProtocol = currentUrl.replace(/^https?:\/\//, '');
+
+        // สร้าง Intent URL สำหรับ Android เพื่อบังคับเปิด Chrome
+        // รูปแบบ: intent://<url>#Intent;scheme=https;package=com.android.chrome;end
+        const intentUrl = `intent://${urlWithoutProtocol}#Intent;scheme=https;package=com.android.chrome;end`;
+
+        // สั่ง Redirect ไปยัง Intent
+        window.location.href = intentUrl;
+        return;
+      }
+
+      // [CASE 2]: iOS หรืออื่นๆ ที่ใช้ Intent ไม่ได้ -> ต้องแจ้งเตือน
+      else {
         alert("the in-app browser do not allow saving image.\n\nบราวเซอร์ของคุณไม่อนุญาติให้บันทึกรูป");
-        return; // จบการทำงานทันที
+        window.location.href = currentUrl.toString();
+        return;
       }
     }
-    // =================================================================================
+  }
+  // =================================================================================
 
     setIsSavingImage(true);
     setIsCapturing(true);

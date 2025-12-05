@@ -120,7 +120,7 @@ const RunnerLookupPage: React.FC = () => {
                     });
                 } else {
                     // On success, navigate to the bib pass page and pass a state to bypass verification
-                    navigate(`/bibpass/${result.data.access_key}`, { state: { verified: true } });
+                    navigate(`/bibpass/${result.data.access_key}`);
                 }
             } else if (result.error) {
                 setError(result.error);
