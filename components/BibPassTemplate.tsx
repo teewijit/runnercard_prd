@@ -677,7 +677,7 @@ const BibPassTemplate: React.FC<BibPassTemplateProps> = ({ runner, config, qrCod
         </div>
 
         {/* Dynamic Fields Overlay */}
-        <div className="absolute inset-0" style={{ overflow: 'visible' }}>
+        <div className="absolute inset-0" style={{ overflow: 'visible' }} translate="no">
           {config.fields?.map((field) => {
             let content = '';
             if (field.key === 'custom_text') {
