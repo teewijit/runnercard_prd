@@ -660,7 +660,7 @@ const BibPassTemplate: React.FC<BibPassTemplateProps> = ({ runner, config, qrCod
         }}
       >
         {/* Background Image - Controls Aspect Ratio */}
-        <div style={{ overflow: 'hidden', width: '100%' }} translate="no">
+        <div style={{ overflow: 'hidden', width: '100%' }}>
           {config.backgroundImageUrl ? (
             <img
               src={config.backgroundImageUrl}
