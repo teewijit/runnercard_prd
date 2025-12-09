@@ -19,6 +19,8 @@ import LoginPage from './components/LoginPage';
 import UrlConfigPage from './components/UrlConfigPage';
 import RunnerLookupPage from './components/RunnerLookupPage';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
+import CropBibCard from './pages/share/CropBibCard';
+import SharePage from './pages/share';
 
 
 // AuthGuard to protect routes
@@ -93,6 +95,8 @@ const App: React.FC = () => {
         <Route path="/login" element={!session ? <LoginPage /> : <Navigate to="/" />} />
         <Route path="/bibpass/:accessKey" element={<BibPassDisplay />} />
         <Route path="/lookup" element={<RunnerLookupPage />} />
+        <Route path="/share" element={<SharePage />} />
+        <Route path="/share/cropBibCard" element={<CropBibCard />} />
 
         {/* Protected Admin Routes */}
         <Route element={<AuthGuard session={session} />}>
