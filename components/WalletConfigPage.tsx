@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { getWalletConfig, updateWalletConfig } from '../services/supabaseService';
-import { WalletConfig, FieldMappingsConfig, TextModuleMapping, Runner, AppleWalletConfig, WebPassConfig } from '../types';
+import { WalletConfig, FieldMappingsConfig, TextModuleMapping, Runner, AppleWalletConfig, WebPassConfig, InformationRow } from '../types';
 import Input from './Input';
 import Button from './Button';
 import LoadingSpinner from './LoadingSpinner';
@@ -202,6 +202,185 @@ const WalletConfigPage: React.FC = () => {
                             ))}
                         </div>
                         <Button type="button" variant="secondary" size="sm" onClick={addTextModule} className="mt-4">Add Text Module</Button>
+                    </div>
+
+                    <div className="p-6 bg-gray-700 rounded-lg">
+                        <h3 className="text-xl font-bold text-white mb-4 border-b border-gray-600 pb-2">Information Rows</h3>
+                        <p className="text-gray-400 text-sm mb-4">
+                            Configure how information is displayed on the card face. Each row can have up to three columns (Left, Middle, Right).
+                        </p>
+                        
+                        <div className="space-y-4">
+                            {(config.field_mappings.informationRows || []).map((row, rowIndex) => (
+                                <div key={rowIndex} className="p-4 bg-gray-800 rounded-md">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h4 className="text-lg font-semibold text-gray-200">Row {rowIndex + 2}</h4>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Left Item */}
+                                        <div className="space-y-2">
+                                            <Input
+                                                id={`row_${rowIndex}_left_label`}
+                                                name="left_label"
+                                                label="Left Label"
+                                                value={row.left?.label || ''}
+                                                onChange={(e) => {
+                                                    const rows = [...(config.field_mappings.informationRows || [])];
+                                                    rows[rowIndex] = {
+                                                        ...rows[rowIndex],
+                                                        left: {
+                                                            ...rows[rowIndex].left,
+                                                            label: e.target.value,
+                                                            value: rows[rowIndex].left?.value || ''
+                                                        }
+                                                    };
+                                                    handleMappingChange('informationRows', rows);
+                                                }}
+                                                placeholder="e.g., POINTS"
+                                            />
+                                            <Input
+                                                id={`row_${rowIndex}_left_value`}
+                                                name="left_value"
+                                                label="Left Value"
+                                                value={row.left?.value || ''}
+                                                onChange={(e) => {
+                                                    const rows = [...(config.field_mappings.informationRows || [])];
+                                                    rows[rowIndex] = {
+                                                        ...rows[rowIndex],
+                                                        left: {
+                                                            ...rows[rowIndex].left,
+                                                            label: rows[rowIndex].left?.label || '',
+                                                            value: e.target.value
+                                                        }
+                                                    };
+                                                    handleMappingChange('informationRows', rows);
+                                                }}
+                                                placeholder="e.g., {points} or 1112"
+                                            />
+                                        </div>
+
+                                        {/* Middle Item */}
+                                        <div className="space-y-2">
+                                            <Input
+                                                id={`row_${rowIndex}_middle_label`}
+                                                name="middle_label"
+                                                label="Middle Label"
+                                                value={row.middle?.label || ''}
+                                                onChange={(e) => {
+                                                    const rows = [...(config.field_mappings.informationRows || [])];
+                                                    rows[rowIndex] = {
+                                                        ...rows[rowIndex],
+                                                        middle: {
+                                                            ...rows[rowIndex].middle,
+                                                            label: e.target.value,
+                                                            value: rows[rowIndex].middle?.value || ''
+                                                        }
+                                                    };
+                                                    handleMappingChange('informationRows', rows);
+                                                }}
+                                                placeholder="e.g., STATUS"
+                                            />
+                                            <Input
+                                                id={`row_${rowIndex}_middle_value`}
+                                                name="middle_value"
+                                                label="Middle Value"
+                                                value={row.middle?.value || ''}
+                                                onChange={(e) => {
+                                                    const rows = [...(config.field_mappings.informationRows || [])];
+                                                    rows[rowIndex] = {
+                                                        ...rows[rowIndex],
+                                                        middle: {
+                                                            ...rows[rowIndex].middle,
+                                                            label: rows[rowIndex].middle?.label || '',
+                                                            value: e.target.value
+                                                        }
+                                                    };
+                                                    handleMappingChange('informationRows', rows);
+                                                }}
+                                                placeholder="e.g., {status} or Active"
+                                            />
+                                        </div>
+
+                                        {/* Right Item */}
+                                        <div className="space-y-2">
+                                            <Input
+                                                id={`row_${rowIndex}_right_label`}
+                                                name="right_label"
+                                                label="Right Label"
+                                                value={row.right?.label || ''}
+                                                onChange={(e) => {
+                                                    const rows = [...(config.field_mappings.informationRows || [])];
+                                                    rows[rowIndex] = {
+                                                        ...rows[rowIndex],
+                                                        right: {
+                                                            ...rows[rowIndex].right,
+                                                            label: e.target.value,
+                                                            value: rows[rowIndex].right?.value || ''
+                                                        }
+                                                    };
+                                                    handleMappingChange('informationRows', rows);
+                                                }}
+                                                placeholder="e.g., CONTACTS"
+                                            />
+                                            <Input
+                                                id={`row_${rowIndex}_right_value`}
+                                                name="right_value"
+                                                label="Right Value"
+                                                value={row.right?.value || ''}
+                                                onChange={(e) => {
+                                                    const rows = [...(config.field_mappings.informationRows || [])];
+                                                    rows[rowIndex] = {
+                                                        ...rows[rowIndex],
+                                                        right: {
+                                                            ...rows[rowIndex].right,
+                                                            label: rows[rowIndex].right?.label || '',
+                                                            value: e.target.value
+                                                        }
+                                                    };
+                                                    handleMappingChange('informationRows', rows);
+                                                }}
+                                                placeholder="e.g., {contacts} or 79"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex gap-2 mt-4">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                    const rows = [...(config.field_mappings.informationRows || [])];
+                                    rows.push({
+                                        left: { label: '', value: '' },
+                                        middle: { label: '', value: '' },
+                                        right: { label: '', value: '' }
+                                    });
+                                    handleMappingChange('informationRows', rows);
+                                }}
+                            >
+                                <span className="mr-2">+</span>
+                                Add row
+                            </Button>
+                            {(config.field_mappings.informationRows || []).length > 0 && (
+                                <Button
+                                    type="button"
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => {
+                                        const rows = [...(config.field_mappings.informationRows || [])];
+                                        rows.pop();
+                                        handleMappingChange('informationRows', rows);
+                                    }}
+                                >
+                                    <span className="mr-2">-</span>
+                                    Remove last row
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </div>
 

@@ -95,7 +95,6 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [hasFormChanges, setHasFormChanges] = useState(false); // New state for tracking form changes
   const [isExporting, setIsExporting] = useState(false); // New state for export loading
-  const [idCardHashMatchWarning, setIdCardHashMatchWarning] = useState<string | null>(null); // Warning when ID card hash matches original
 
   // Column visibility state - all visible by default
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(
@@ -156,45 +155,43 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
 
   // Effect to update hasFormChanges whenever editForm, isEditingRunner, or idCardNumber changes
   useEffect(() => {
-    if (isEditingRunner && editForm) {
-      // Check if id_card_hash would change if we hash the current idCardNumber
-      const wouldHashChange = async () => {
-        if (idCardNumber.trim()) {
+    if (!isEditingRunner || !editForm) {
+      setHasFormChanges(false);
+      return;
+    }
+
+    // Check other fields first (excluding id_card_hash since we handle it separately)
+    const otherFieldsChanged = !areFormsEqual(editForm, isEditingRunner);
+    
+    // Check if ID card hash would change
+    const checkHashChange = async () => {
+      if (idCardNumber.trim()) {
+        // If idCardNumber is provided, hash it and compare with original
+        try {
           const newHash = await hashNationalId(idCardNumber.trim());
           const currentHash = isEditingRunner.id_card_hash || '';
           return newHash !== currentHash;
-        } else {
-          // If idCardNumber is empty, check if original had a hash
-          return (isEditingRunner.id_card_hash || '') !== (editForm.id_card_hash || '');
+        } catch (error) {
+          console.error('Error hashing ID card number:', error);
+          return false;
         }
-      };
-      
-      // For now, check other fields first
-      const otherFieldsChanged = !areFormsEqual(editForm, isEditingRunner);
-      
-      // If idCardNumber is provided, we need to check hash change
-      if (idCardNumber.trim()) {
-        hashNationalId(idCardNumber.trim()).then(newHash => {
-          const currentHash = isEditingRunner.id_card_hash || '';
-          const hashChanged = newHash !== currentHash;
-          setHasFormChanges(otherFieldsChanged || hashChanged);
-          // Show warning if hash matches original (no change)
-          if (!hashChanged && currentHash) {
-            setIdCardHashMatchWarning('เลขบัตรนี้ตรงกับข้อมูลเดิม');
-          } else {
-            setIdCardHashMatchWarning(null);
-          }
-        });
       } else {
-        // Check if id_card_hash was removed
-        const hashRemoved = (isEditingRunner.id_card_hash || '') !== (editForm.id_card_hash || '');
-        setHasFormChanges(otherFieldsChanged || hashRemoved);
-        setIdCardHashMatchWarning(null);
+        // If idCardNumber is empty, check if original had a hash (user wants to remove it)
+        return (isEditingRunner.id_card_hash || '') !== '';
       }
-    } else {
-      setHasFormChanges(false);
-      setIdCardHashMatchWarning(null);
-    }
+    };
+
+    // Use async function to handle hash comparison
+    let isCancelled = false;
+    checkHashChange().then(hashChanged => {
+      if (!isCancelled) {
+        setHasFormChanges(otherFieldsChanged || hashChanged);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [editForm, isEditingRunner, areFormsEqual, idCardNumber]);
 
 
@@ -265,7 +262,6 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
     setIsEditModalOpen(true);
     setUpdateError(null);
     setHasFormChanges(false); // Reset changes flag when opening
-    setIdCardHashMatchWarning(null); // Reset warning when opening
   }, []);
 
   const handleEditFormChange = useCallback((event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -564,7 +560,6 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
         onClose={() => {
           setIsEditModalOpen(false);
           setIdCardNumber('');
-          setIdCardHashMatchWarning(null);
         }}
         title="Edit Runner Details"
         footer={modalFooter}
@@ -614,7 +609,6 @@ const RunnerTable: React.FC<RunnerTableProps> = ({ refreshDataTrigger }) => {
                   value={idCardNumber}
                   onChange={(e) => setIdCardNumber(e.target.value)}
                   placeholder="Enter ID card number (will be hashed on save)"
-                  error={idCardHashMatchWarning || undefined}
                 />
                 <Input
                   id="edit-id_card_hash"
