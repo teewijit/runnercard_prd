@@ -159,10 +159,15 @@ export interface AppleFieldMapping {
 }
 
 export interface AppleFieldMappingsConfig {
+  headerFields?: AppleFieldMapping[]; // Optional: For generic pass type
   primaryFields: AppleFieldMapping[];
   secondaryFields: AppleFieldMapping[];
   auxiliaryFields: AppleFieldMapping[];
   backFields: AppleFieldMapping[];
+
+    // ✅ เพิ่ม: Google Wallet style config (จะถูกแปลงเป็น Apple Wallet fields อัตโนมัติ)
+    header?: { enabled: boolean; template: string }; // Google Wallet style header
+    subheader?: { enabled: boolean; template: string }; // Google Wallet style subheader
 }
 
 export interface AppleWalletConfig {
@@ -180,7 +185,8 @@ export interface AppleWalletConfig {
   stripImageUri?: string;
 
   // Triggers
-  relevantDate?: string; // ISO 8601 Date string
+  relevantDate?: string; // ISO 8601 Date string - When pass should appear on lock screen
+  expirationDate?: string; // ISO 8601 Date string - When pass expires (prevents pass from being marked as expired)
   eventLatitude?: number;
   eventLongitude?: number;
   relevantText?: string; // Text displayed on lock screen near location

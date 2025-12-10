@@ -91,6 +91,18 @@ const AppleWalletPassPreview: React.FC<AppleWalletPassPreviewProps> = ({ config 
             )}
 
             <div className="p-4">
+                {/* Header Fields (Generic Pass Type) */}
+                {(field_mappings?.headerFields || []).length > 0 && (
+                    <div className="mb-4 pb-4 border-b border-gray-600">
+                        {(field_mappings.headerFields || []).map(field => (
+                            <div key={field.id || field.key || Math.random()} className="text-center">
+                                <p className="uppercase text-xs" style={{ color: labelColor }}>{field.label || ''}</p>
+                                <p className="font-semibold text-sm" style={{ color: foregroundColor }}>{fillTemplate(field.valueTemplate, PREVIEW_RUNNER)}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                
                 {/* Primary & Secondary Fields */}
                 <div className="flex justify-between items-start">
                     <div>

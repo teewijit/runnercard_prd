@@ -29,6 +29,7 @@ const DEFAULT_APPLE_CONFIG: AppleWalletConfig = {
   logoUri: '',
   stripImageUri: '',
   relevantDate: '',
+  expirationDate: '',
   eventLatitude: undefined,
   eventLongitude: undefined,
   relevantText: '',
@@ -84,6 +85,9 @@ const AppleWalletConfigPage: React.FC = () => {
             
             // Use saved mappings if they exist, otherwise keep defaults
             const finalFieldMappings = savedAppleConfig.field_mappings ? {
+                headerFields: Array.isArray(savedAppleConfig.field_mappings.headerFields) 
+                    ? savedAppleConfig.field_mappings.headerFields 
+                    : [],
                 primaryFields: Array.isArray(savedAppleConfig.field_mappings.primaryFields) && savedAppleConfig.field_mappings.primaryFields.length > 0 
                     ? savedAppleConfig.field_mappings.primaryFields 
                     : DEFAULT_APPLE_CONFIG.field_mappings.primaryFields,
@@ -117,10 +121,29 @@ const AppleWalletConfigPage: React.FC = () => {
                 }
             }
             
+            // Convert expirationDate ISO to datetime-local format
+            let expirationDateLocal = '';
+            if (savedAppleConfig.expirationDate) {
+                try {
+                    const date = new Date(savedAppleConfig.expirationDate);
+                    if (!isNaN(date.getTime())) {
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        expirationDateLocal = `${year}-${month}-${day}T${hours}:${minutes}`;
+                    }
+                } catch (e) {
+                    console.error('Error parsing expirationDate:', e);
+                }
+            }
+            
             setAppleConfig({ 
                 ...DEFAULT_APPLE_CONFIG, 
                 ...savedAppleConfig,
                 relevantDate: relevantDateLocal || savedAppleConfig.relevantDate || '',
+                expirationDate: expirationDateLocal || savedAppleConfig.expirationDate || '',
                 field_mappings: finalFieldMappings
             });
         } else if (result.error) {
@@ -201,9 +224,22 @@ const AppleWalletConfigPage: React.FC = () => {
             }
         }
         
+        let expirationDateISO = '';
+        if (appleConfig.expirationDate) {
+            try {
+                const date = new Date(appleConfig.expirationDate);
+                if (!isNaN(date.getTime())) {
+                    expirationDateISO = date.toISOString();
+                }
+            } catch (e) {
+                console.error('Error converting expirationDate to ISO:', e);
+            }
+        }
+        
         const configToSave = {
             ...appleConfig,
             relevantDate: relevantDateISO || undefined,
+            expirationDate: expirationDateISO || undefined,
         };
         
         const updatedFullConfig: WalletConfig = {
@@ -309,16 +345,35 @@ const AppleWalletConfigPage: React.FC = () => {
                                 <h4 className="text-lg font-medium text-white">Pass Images</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
                                     <div>
-                                        <Input id="iconUri" name="iconUri" label="Icon Image URL" value={appleConfig.iconUri || ''} onChange={handleInputChange} placeholder="https://example.com/icon.png" />
-                                        <p className="mt-1 text-sm text-gray-400">Icon of the pass (29x29pt, 2x and 3x recommended).</p>
+                                        <Input id="iconUri" name="iconUri" label="Icon Image URL (Optional)" value={appleConfig.iconUri || ''} onChange={handleInputChange} placeholder="https://example.com/icon.png" />
+                                        <p className="mt-1 text-sm text-gray-400">Icon of the pass (29x29pt, 2x and 3x recommended). If not provided, logoText will be used instead.</p>
+                                        {appleConfig.iconUri && (
+                                            <div className="mt-2">
+                                                <img src={appleConfig.iconUri} alt="Icon Preview" className="w-8 h-8 object-contain border border-gray-600 rounded" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                            </div>
+                                        )}
                                     </div>
                                     <div>
                                         <Input id="logoUri" name="logoUri" label="Logo Image URL" value={appleConfig.logoUri || ''} onChange={handleInputChange} placeholder="https://example.com/logo.png" />
                                         <p className="mt-1 text-sm text-gray-400">Logo displayed at the top left (max 160x50pt).</p>
+                                        {appleConfig.logoUri && (
+                                            <div className="mt-2">
+                                                <img src={appleConfig.logoUri} alt="Logo Preview" className="h-10 object-contain border border-gray-600 rounded" style={{ maxWidth: '160px' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                            </div>
+                                        )}
                                     </div>
                                     <div>
-                                        <Input id="stripImageUri" name="stripImageUri" label="Strip (Hero) Image URL" value={appleConfig.stripImageUri || ''} onChange={handleInputChange} placeholder="https://example.com/strip.png" />
-                                        <p className="mt-1 text-sm text-gray-400">Background strip image for Event Ticket style (375x98pt for 1x).</p>
+                                        <Input id="stripImageUri" name="stripImageUri" label="Strip (Hero) Image URL (Optional)" value={appleConfig.stripImageUri || ''} onChange={handleInputChange} placeholder="https://example.com/strip.png" />
+                                        <p className="mt-1 text-sm text-gray-400">
+                                            Strip image (Hero image) แสดงที่ด้านบนของ pass ระหว่าง header และ primaryFields (375x98pt @1x, 2x และ 3x recommended). 
+                                            สำหรับ generic pass type จะแสดงเป็น thumbnail ที่ด้านบน
+                                        </p>
+                                        {appleConfig.stripImageUri && (
+                                            <div className="mt-2">
+                                                <img src={appleConfig.stripImageUri} alt="Strip Preview" className="w-full h-24 object-cover border border-gray-600 rounded" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                <p className="mt-1 text-xs text-gray-500">Preview: Strip image จะแสดงที่ด้านบนของ pass</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -338,7 +393,19 @@ const AppleWalletConfigPage: React.FC = () => {
                                         onChange={handleInputChange} 
                                         className="block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 sm:text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
                                     />
-                                    <p className="mt-1 text-sm text-gray-400">Pass will appear on lock screen near this time.</p>
+                                    <p className="mt-1 text-sm text-yellow-400">⚠️ <strong>สำคัญ:</strong> Relevant Date ต้องเป็นวันที่ในอนาคต หากตั้งเป็นวันที่ในอดีต iOS จะทำเครื่องหมายว่าบัตรหมดอายุ แม้ว่า expirationDate จะเป็นอนาคตก็ตาม ให้เว้นว่างไว้หากงานได้ผ่านไปแล้ว</p>
+                                </div>
+                                <div>
+                                    <label htmlFor="expirationDate" className="block text-sm font-medium text-gray-300 mb-1">Expiration Date</label>
+                                    <input 
+                                        type="datetime-local" 
+                                        id="expirationDate" 
+                                        name="expirationDate" 
+                                        value={appleConfig.expirationDate || ''} 
+                                        onChange={handleInputChange} 
+                                        className="block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 sm:text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                    <p className="mt-1 text-sm text-gray-400">วันที่บัตรหมดอายุ หากไม่ตั้งค่า จะใช้ค่าเริ่มต้นเป็น 1 ปีนับจากวันนี้ ป้องกันไม่ให้บัตรถูกย้ายไปยัง "บัตรที่หมดอายุ"</p>
                                 </div>
                                 <div>
                                     <Input id="relevantText" name="relevantText" label="Relevant Text" value={appleConfig.relevantText || ''} onChange={handleInputChange} placeholder="e.g., Welcome to the Race!" />
@@ -387,7 +454,7 @@ const AppleWalletConfigPage: React.FC = () => {
                             </div>
                         </div>
 
-
+                        {renderFieldMappingSection('Header Fields (Optional)', 'headerFields')}
                         {renderFieldMappingSection('Primary Fields', 'primaryFields')}
                         {renderFieldMappingSection('Secondary Fields', 'secondaryFields')}
                         {renderFieldMappingSection('Auxiliary Fields', 'auxiliaryFields')}

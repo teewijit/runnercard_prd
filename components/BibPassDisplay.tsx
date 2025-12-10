@@ -403,59 +403,104 @@ export const BibPassDisplay: React.FC<BibPassDisplayProps> = () => {
         // 1. กำหนด URL พร้อม Query Param (เพื่อให้ Function รู้ว่าใครขอ Pass)
         const downloadUrl = `${fullUrl}?runnerId=${runner.id}`;
 
-        // 2. เรียก Edge Function แบบ GET
-        // ไม่ต้องใส่ Content-Type: application/json เพราะเราไม่ได้ส่ง Body
+        // 2. ✅ แก้ไข: สำหรับ Safari (ทั้ง iOS และ Desktop) ใช้ direct link แทน blob
+        // Safari มีปัญหาในการดาวน์โหลด blob URL แต่จะรู้จัก application/vnd.apple.pkpass จาก direct link
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+        
+        if (isSafari || isIOS) {
+          // ✅ สำหรับ Safari: ใช้ direct link ไปที่ API endpoint
+          // Safari จะรู้จัก application/vnd.apple.pkpass และเปิดใน Wallet app อัตโนมัติ
+          console.log('Using direct link for Safari/iOS');
+          window.location.href = downloadUrl;
+          
+          // ให้เวลา Safari เปิด Wallet app
+          setTimeout(() => {
+            setIsAddingToAppleWallet(false);
+          }, 2000);
+          return;
+        }
+
+        // 3. สำหรับ Browser อื่นๆ: ใช้ fetch + blob (Chrome, Firefox, etc.)
         const response = await fetch(downloadUrl, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${config.SUPABASE_ANON_KEY}`,
-            // แนะนำให้ใส่ Accept เพื่อบอก Server ว่าเราคาดหวังไฟล์ Pass
             'Accept': 'application/vnd.apple.pkpass'
           }
         });
 
-        // 3. เช็ค Error (ถ้าไม่ใช่ 200 OK)
+        // 4. เช็ค Error (ถ้าไม่ใช่ 200 OK)
         if (!response.ok) {
           const errorText = await response.text();
           let errorMessage = 'Failed to generate Apple Wallet pass.';
+          let errorData: any = {};
+          
           try {
-            const errorData = JSON.parse(errorText);
+            errorData = JSON.parse(errorText);
             errorMessage = errorData.error || errorData.message || errorMessage;
+            
+            // ✅ เพิ่ม: แสดง troubleshooting steps ถ้ามี
+            if (errorData.troubleshooting && Array.isArray(errorData.troubleshooting)) {
+              const troubleshooting = errorData.troubleshooting.join('\n• ');
+              errorMessage = `${errorMessage}\n\n${troubleshooting}`;
+              
+              // ถ้ามี configUrl ให้แนะนำ
+              if (errorData.configUrl) {
+                errorMessage += `\n\nPlease go to Apple Wallet Configuration to fix this.`;
+              }
+            }
           } catch (e) {
             errorMessage = errorText || `Server returned ${response.status}`;
           }
-          throw new Error(errorMessage);
+          
+          // สร้าง error object ที่มี troubleshooting info
+          const error = new Error(errorMessage) as any;
+          error.troubleshooting = errorData.troubleshooting;
+          error.configUrl = errorData.configUrl;
+          throw error;
         }
 
-        // 4. เช็ค Content-Type ว่าเป็น pkpass จริงไหม
+        // 5. เช็ค Content-Type ว่าเป็น pkpass จริงไหม
         const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/vnd.apple.pkpass')) {
           throw new Error('Invalid file type returned from server.');
         }
 
-        // 5. แปลงเป็น Blob
+        // 6. แปลงเป็น Blob และดาวน์โหลด
         const blob = await response.blob();
         const blobUrl = window.URL.createObjectURL(blob);
 
-        // 6. สร้าง Link เพื่อดาวน์โหลด (วิธีนี้เสถียรสุดทั้ง iOS และ Android/Desktop)
-        // การใช้ window.open(blobUrl) หลังจาก await มักจะโดน Browser Block บน iOS
-        // การสร้าง element <a> แล้ว click() จะได้ผลดีกว่า
+        // ✅ สำหรับ Desktop/Android (non-Safari): ใช้ <a download>
         const link = document.createElement('a');
         link.href = blobUrl;
-        link.download = `RacePass_${runner.bib || 'ticket'}.pkpass`; // ตั้งชื่อไฟล์
+        link.download = `RacePass_${runner.bib || 'ticket'}.pkpass`;
         document.body.appendChild(link);
-
-        link.click(); // Trigger การดาวน์โหลด
-
-        // Cleanup
+        link.click();
         document.body.removeChild(link);
+        
+        // Cleanup
         setTimeout(() => {
           window.URL.revokeObjectURL(blobUrl);
         }, 1000);
 
       } catch (err: any) {
         console.error('Apple Wallet Error:', err);
-        setWalletError(err.message || 'Failed to generate Apple Wallet pass.');
+        
+        // ✅ เพิ่ม: แสดง error message ที่ชัดเจนขึ้น
+        let errorMessage = err.message || 'Failed to generate Apple Wallet pass.';
+        
+        // ถ้า error มี troubleshooting info ให้แสดง
+        if (err.troubleshooting && Array.isArray(err.troubleshooting)) {
+          errorMessage = `${err.message || err.error || 'Failed to generate Apple Wallet pass.'}\n\n${err.troubleshooting.join('\n')}`;
+          
+          // ถ้ามี configUrl ให้แนะนำให้ไปตั้งค่า
+          if (err.configUrl) {
+            errorMessage += `\n\nPlease configure Icon Image URL in Apple Wallet settings.`;
+          }
+        }
+        
+        setWalletError(errorMessage);
       } finally {
         // ย้ายมาไว้ใน finally เพื่อให้ loading หายไปเสมอ ไม่ว่าจะ error หรือสำเร็จ
         setIsAddingToAppleWallet(false);

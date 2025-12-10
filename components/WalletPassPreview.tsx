@@ -89,21 +89,6 @@ const WalletPassPreview: React.FC<WalletPassPreviewProps> = ({ config }) => {
         <h3 className="font-semibold truncate">{card_title}</h3>
       </div>
 
-      {/* Hero Image */}
-      <div className="w-full h-32 bg-gray-700">
-        {hero_image_uri ? (
-          <img
-            src={hero_image_uri}
-            alt="Hero"
-            key={hero_image_uri} // Force re-render on URL change
-            className="w-full h-full object-cover"
-            onError={handleImageError}
-          />
-        ) : (
-           <div className="w-full h-full flex items-center justify-center text-gray-400">Hero Image</div>
-        )}
-      </div>
-
       {/* Main Content */}
       <div className="p-4 text-center">
         {headerText && <p className="font-bold text-xl truncate">{headerText}</p>}
@@ -129,6 +114,21 @@ const WalletPassPreview: React.FC<WalletPassPreviewProps> = ({ config }) => {
             ))}
         </div>
        )}
+
+      {/* Hero Image - ย้ายมาอยู่ล่างสุด */}
+      <div className="w-full h-32 bg-gray-700">
+        {hero_image_uri ? (
+          <img
+            src={hero_image_uri}
+            alt="Hero"
+            key={hero_image_uri} // Force re-render on URL change
+            className="w-full h-full object-cover"
+            onError={handleImageError}
+          />
+        ) : (
+           <div className="w-full h-full flex items-center justify-center text-gray-400">Hero Image</div>
+        )}
+      </div>
     </div>
   );
 };
